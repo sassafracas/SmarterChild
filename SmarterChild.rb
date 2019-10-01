@@ -1,12 +1,12 @@
+require 'dotenv/load'
 require 'discordrb'
 require 'pry'
 require 'pg'
 require 'pp'
-require 'dotenv/load'
 
-bot = Discordrb::Commands::CommandBot.new token: ENV['DISCORD_TOKEN'], client_id: ENV['DISCORD_CLIENT_ID'], prefix: '!'
+bot = Discordrb::Commands::CommandBot.new token: ENV["DISCORD_TOKEN"], client_id: ENV["DISCORD_CLIENT_ID"], prefix: '!'
 
-db = PG::Connection.open(:dbname => ENV['DB_NAME'], :user => ENV['DB_USER'])
+@db = PG::Connection.open(:dbname => ENV['DB_NAME'], :user => ENV['DB_USER'])
 
 # db.exec("DELETE FROM users WHERE name = 'smith';")
 
@@ -122,30 +122,13 @@ end
 #Reminder function
 
 bot.command(:reminder, usage: 'Remind me') do |event|
-  if is_registered?(event)
-    registered_role = event.server.roles.find { |role| role.name == "Touched By SmarterChild" }
-    event.user.add_role(registered_role)
-    event.user.await(:user_name) do |name_event|
-      user_name = name_event.message.content
-      discord_id = event.user.id
-      discord_name = event.user.username
-      db.prepare('addusr', "
-        INSERT INTO users (name, discord_id, discord_name)
-        VALUES ($1::text, $2::bigint, $3::text)
-        ON CONFLICT (discord_id) 
-        DO NOTHING
-        RETURNING discord_id
-      ;")
-      results = db.exec_prepared('addusr', [user_name, discord_id, discord_name])
- # If it executes result.values puts out the discord_id
 
-      if !results.values.empty?
-        name_event.respond "You've been registered!"
-        results.clear if results
-      end
-    end
+  if is_registered?(event)
+    register_user(event)
+    add_user_to_db(event)
+    
   end
-  event.respond("Please enter your name (real or nickname): ")
+  
 end
 
 
@@ -217,6 +200,37 @@ end
 #Reminder methods
 def is_registered?(event)
   !event.user.roles.any? {|obj| obj.name == 'Touched By SmarterChild'} 
+end
+
+def register_user(event)
+  registered_role = event.server.roles.find { |role| role.name == "Touched By SmarterChild" }
+  event.user.add_role(registered_role)
+end
+
+def add_user_to_db(event)
+  event.respond("Please enter your name (real or nickname): ")
+  response = event.user.await!
+  user_name = response.message.content
+  discord_id = event.user.id
+  discord_name = event.user.username
+  @db.prepare('addusr', "
+    INSERT INTO users (name, discord_id, discord_name)
+    VALUES ($1::text, $2::bigint, $3::text)
+    ON CONFLICT (discord_id) 
+    DO NOTHING
+    RETURNING discord_id
+  ;")
+  results = @db.exec_prepared('addusr', [user_name, discord_id, discord_name])
+  # If it executes result.values puts out the discord_id
+  if !results.values.empty?
+    event.respond "You've been registered!"
+    results.clear
+  else
+    event.respond "Please enter the time of the event (MM/DD/YY HH:MM AM/PM)"
+    response = event.user.await!
+    date = response.message.content
+    puts date
+  end
 end
 #Has to be at the end.
 bot.command(:exit, help_available: false) do |event|
