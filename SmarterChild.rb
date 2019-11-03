@@ -18,21 +18,34 @@ require 'pp'
 #   # binding.pry
 # end
 
+# Add handling for multiple reminders at the same time
 def check_db_for_events
-  # puts "YO" + " " + Time.now.to_s
+  puts "YO" + " " + Time.now.to_s
   results = @db.exec("
     SELECT * FROM events 
     WHERE reminder_time = date_trunc('minute', CURRENT_TIMESTAMP(0));
   ")
   if !results.values.empty?
     # binding.pry
+    user_results = @db.exec("
+      SELECT discord_name, timezone, reminder_time AT TIME ZONE timezone
+      FROM users u
+      INNER JOIN user_events ue ON ue.user_id = u.user_id
+      INNER JOIN events e ON e.event_id = ue.event_id
+      WHERE ue.event_id = #{results.values.flatten[0].to_i};
+    ")
+    # timezoned_results = @db.exec("
+    #   SELECT reminder_time AT TIME ZONE 'US/Eastern' FROM events                                   
+    #   WHERE event_id = #{results.values.flatten[0].to_i};
+    # ")
     uri_time = results.values.flatten[3].split()[-2..-1].join(" ")
-    @bot.find_channel("test")[0].send_embed("**Reminder**") do |embed|
+    binding.pry
+    @bot.find_user("#{user_results.values.flatten[0]}")[0].send_embed("**Reminder**") do |embed|
       embed.colour = 0x4e06ca
       embed.add_field(name: "Title", value: "#{results.values.flatten[2]}")
       embed.add_field(name: "Message", value: "#{results.values.flatten[4]}")
-      embed.add_field(name: "Time", value: "#{results.values.flatten[3]}")
-      embed.description = "[Convert to your local time](https://duckduckgo.com/?#{URI.encode_www_form([["q", "#{uri_time}"]])}&ia=answer)"
+      embed.add_field(name: "Time", value: "#{user_results.values.flatten[2]} (#{user_results.values.flatten[1]})")
+      # embed.description = "[Convert to your local time](https://duckduckgo.com/?#{URI.encode_www_form([["q", "#{uri_time}"]])}&ia=answer)"
     end
   end
 end
@@ -140,6 +153,14 @@ check_events
 #   INNER JOIN events e ON e.event_id = ue.event_id
 #   WHERE ue.event_id = 1
 # ;")
+
+# db.exec("
+# SELECT discord_id, timezone, reminder_time AT TIME ZONE 'US/Central'
+# FROM users u
+# INNER JOIN user_events ue ON ue.user_id = u.user_id
+# INNER JOIN events e ON e.event_id = ue.event_id
+# WHERE ue.event_id = 35;
+# ")
 
 # db.exec("DROP TABLE users, events, user_events;")
 
