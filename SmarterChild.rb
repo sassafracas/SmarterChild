@@ -18,28 +18,33 @@ require 'pp'
 #   # binding.pry
 # end
 
+def check_db_for_events
+  # puts "YO" + " " + Time.now.to_s
+  results = @db.exec("
+    SELECT * FROM events 
+    WHERE reminder_time = date_trunc('minute', CURRENT_TIMESTAMP(0));
+  ")
+  if !results.values.empty?
+    # binding.pry
+    uri_time = results.values.flatten[3].split()[-2..-1].join(" ")
+    @bot.find_channel("test")[0].send_embed("**Reminder**") do |embed|
+      embed.colour = 0x4e06ca
+      embed.add_field(name: "Title", value: "#{results.values.flatten[2]}")
+      embed.add_field(name: "Message", value: "#{results.values.flatten[4]}")
+      embed.add_field(name: "Time", value: "#{results.values.flatten[3]}")
+      embed.description = "[Convert to your local time](https://duckduckgo.com/?#{URI.encode_www_form([["q", "#{uri_time}"]])}&ia=answer)"
+    end
+  end
+end
 
 # Maybe pm reminders to user who created reminder instead of channel + mention
 # Add "convert time" link to new event embed, and add user timezone query to get a select for utc time in user local time (Maybe uneccesary since user pm will have time)
 def check_events
+  check_db_for_events
   Thread.new do
     loop do 
       sleep 60
-      results = @db.exec("
-      SELECT * FROM events 
-      WHERE reminder_time = date_trunc('minute', CURRENT_TIMESTAMP(0));
-    ")
-      if !results.values.empty?
-        binding.pry
-        uri_time = results.values.flatten[3].split()[-2..-1].join(" ")
-        @bot.find_channel("test")[0].send_embed("**Reminder**") do |embed|
-          embed.colour = 0x4e06ca
-          embed.add_field(name: "Title", value: "#{results.values.flatten[2]}")
-          embed.add_field(name: "Message", value: "#{results.values.flatten[4]}")
-          embed.add_field(name: "Time", value: "#{results.values.flatten[3]}")
-          embed.description = "[Convert to your local time](https://duckduckgo.com/?#{URI.encode_www_form([["q", "#{uri_time}"]])}&t=brave&ia=answer)"
-        end
-      end
+      check_db_for_events
     end
   end
 end
@@ -287,14 +292,14 @@ def add_user_to_db(event)
   end
 end
 
-# Delete !reminder, bot question, and user answer after event registration
+
 # Change event registered to pm to user with Reminder set for localtime or do a diff between creation_time and reminder time to show when the reminder will happen ("Reminder set for <time> from now")
 def create_user_event(event)
   discord_id = event.user.id
   results = @db.exec("SELECT timezone, user_id from users WHERE discord_id = #{discord_id};")
   timezone = results.values.flatten[0]
   user_id = results.values.flatten[1].to_i
-  event.respond "Please enter the time & description of event (MM/DD/YY HH:MM AM/PM, Title, Message)"
+  automated_response = event.respond "Please enter the time & description of event (MM/DD/YY HH:MM AM/PM, Title, Message)"
   response = event.user.await!
   eventArr = response.message.content.split(/,\s*/)
   date = eventArr[0] + " " + timezone
@@ -303,11 +308,12 @@ def create_user_event(event)
   @db.prepare('addtime', "
     INSERT INTO events 
     VALUES (DEFAULT, DEFAULT, $1::text, $2::timestamptz, $3::text)
-    RETURNING event_id;
+    RETURNING event_id, reminder_time - creation_time;
   ")
   results = @db.exec_prepared('addtime', [title, date, message])
+  # binding.pry
   event_id = results.values.flatten[0].to_i
-
+  time_till = results.values.flatten[1]
   @db.exec("DEALLOCATE addtime;")
 
   if !results.values.empty?
@@ -315,7 +321,9 @@ def create_user_event(event)
       INSERT INTO user_events 
       VALUES (#{user_id}, #{event_id});
     ")
-    event.respond "Event registered!"
+
+    event.respond ">>> Reminder set for #{event.user.name} for #{time_till} from now."
+    event.channel.delete_messages([event.message, automated_response, response.message])
     results.clear
   else
     event.respond "Event Registration Error"
