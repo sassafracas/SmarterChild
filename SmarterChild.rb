@@ -39,14 +39,16 @@ def check_db_for_events
     #   WHERE event_id = #{results.values.flatten[0].to_i};
     # ")
     uri_time = results.values.flatten[3].split()[-2..-1].join(" ")
-    binding.pry
-    @bot.find_user("#{user_results.values.flatten[0]}")[0].send_embed("**Reminder**") do |embed|
-      embed.colour = 0x4e06ca
-      embed.add_field(name: "Title", value: "#{results.values.flatten[2]}")
-      embed.add_field(name: "Message", value: "#{results.values.flatten[4]}")
-      embed.add_field(name: "Time", value: "#{user_results.values.flatten[2]} (#{user_results.values.flatten[1]})")
-      # embed.description = "[Convert to your local time](https://duckduckgo.com/?#{URI.encode_www_form([["q", "#{uri_time}"]])}&ia=answer)"
-    end
+    # binding.pry
+    @bot.find_user("#{user_results.values.flatten[0]}")[0].pm("**Reminder - #{results.values.flatten[2]}**```#{results.values.flatten[4]}```")
+    
+    # .send_embed("**Reminder**") do |embed|
+    #   embed.colour = 0x4e06ca
+    #   embed.add_field(name: "Title", value: "#{results.values.flatten[2]}")
+    #   embed.add_field(name: "Message", value: "#{results.values.flatten[4]}")
+    #   embed.add_field(name: "Time", value: "#{user_results.values.flatten[2]} (#{user_results.values.flatten[1]})")
+    #   embed.description = "[Convert to your local time](https://duckduckgo.com/?#{URI.encode_www_form([["q", "#{uri_time}"]])}&ia=answer)"
+    # end
   end
 end
 
