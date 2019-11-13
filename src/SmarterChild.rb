@@ -184,40 +184,6 @@ module Bot
     end
   end
 
-  BOT.command(:dota2_a, description: "Show the last Dota 2 Game of Alienated.") do |event|
-      hash = most_recent_dota_game(12540712)
-      recent_game_match_id = hash["result"]["matches"][0]["match_id"]
-      opendota_url = "https://www.opendota.com/matches/#{recent_game_match_id}"
-      event.respond(opendota_url)
-  end
-
-  BOT.command(:dota2_g, description: "Show the last Dota 2 Game of Gingervitis.") do |event|
-      hash = most_recent_dota_game(34933397)
-      recent_game_match_id = hash["result"]["matches"][0]["match_id"]
-      opendota_url = "https://www.opendota.com/matches/#{recent_game_match_id}"
-      event.respond(opendota_url)
-  end
-
-  BOT.command(:dota2_t, description: "Show the last Dota 2 Game of Teebs.") do |event|
-      hash = most_recent_dota_game(2148619)
-      recent_game_match_id = hash["result"]["matches"][0]["match_id"]
-      opendota_url = "https://www.opendota.com/matches/#{recent_game_match_id}"
-      event.respond(opendota_url)
-  end
-
-  def make_web_request(url)
-    all_recent_games = RestClient.get(url)
-    JSON.parse(all_recent_games)
-  end
-
-  def most_recent_dota_game(account_id)
-    header = "account_id=#{account_id}"
-    valve_key = ENV['VALVE_KEY']
-    url = "https://api.steampowered.com/IDOTA2Match_570/GetMatchHistory/V001/?#{header}&key=#{valve_key}"
-    all_recent_games_hash = make_web_request(url)
-    all_recent_games_hash
-  end
-
   #Reminder methods
   def is_registered?(event)
     !event.user.roles.any? {|obj| obj.name == 'Touched By SmarterChild'} 
@@ -341,7 +307,7 @@ module Bot
 
 
   #Has to be at the end.
-  BOT.command(:exit, help_available: false) do |event|
+  BOT.command(%i[exit quit], help_available: false) do |event|
     break unless event.user.id == ENV['ADMIN_DISCORD_ID'].to_i
     BOT.send_message(event.channel.id, 'SmarterChild is shutting down.')
     exit

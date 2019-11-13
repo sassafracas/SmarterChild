@@ -1,5 +1,5 @@
 module Bot::DiscordEvents
-    # This event is processed each time the bot succesfully connects to discord.
+    # This event happens whenever someone says 'dank'.
     module Dank
         extend Discordrb::EventContainer
 
