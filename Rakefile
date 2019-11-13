@@ -5,9 +5,22 @@ $color_end = "\033[00m"
 $succeeded = "#{$green_begin}SUCCEEDED#{$color_end}"
 $failed = "#{$red_begin}FAILED#{$color_end}"
 
+desc 'Start the bot'
 task :default do
-    puts "Hello World!"
-  end
+    sh 'bundle exec ruby src/SmarterChild.rb'
+end
+
+desc 'Install requirements'
+task :install do
+  sh 'gem install bundler --conservative'
+  sh 'bundle update'
+end
+
+desc 'Update from Github repo'
+task :update do
+  sh 'git stash save -u'
+  sh 'git pull'
+end
 
 namespace :db do
     desc "Creates default tables"
