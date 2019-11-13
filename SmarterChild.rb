@@ -18,6 +18,8 @@ require 'pp'
 #   # binding.pry
 # end
 
+
+# Make sure it checks only after it's ready (websockets connected)
 def check_db_for_events
   puts "YO" + " " + Time.now.to_s
   results = @db.exec("
@@ -25,32 +27,37 @@ def check_db_for_events
     WHERE reminder_time = date_trunc('minute', CURRENT_TIMESTAMP(0));
   ")
   if !results.values.empty?
+
     results.values.each do |eventArr|
-      user_results = @db.exec("
-        SELECT discord_name, timezone, reminder_time AT TIME ZONE timezone
-        FROM users u
-        INNER JOIN user_events ue ON ue.user_id = u.user_id
-        INNER JOIN events e ON e.event_id = ue.event_id
-        WHERE ue.event_id = #{eventArr[0].to_i};
-      ")
-      @bot.find_user("#{user_results.values.flatten[0]}")[0].pm("**Reminder - #{eventArr[2]}**```#{eventArr[4]}```")
+      if eventArr[4].to_i === 2
+        user_results = @db.exec("
+          SELECT discord_name, timezone, reminder_time AT TIME ZONE timezone
+          FROM users u
+          INNER JOIN user_events ue ON ue.user_id = u.user_id
+          INNER JOIN events e ON e.event_id = ue.event_id
+          WHERE ue.event_id = #{eventArr[0].to_i};
+        ")
+        @bot.find_user("#{user_results.values.flatten[0]}")[0].pm("**Reminder - #{eventArr[2]}**```#{eventArr[5]}```")
+      elsif eventArr[4].to_i === 1
+        uri_time = eventArr[3].split()[-2..-1].join(" ")
+        date = eventArr[3].split()[0]
+
+        @bot.find_channel("test")[0].send_embed("**Event**") do |embed|
+          embed.colour = 0x4e06ca
+          embed.add_field(name: "Title", value: "#{eventArr[2]}")
+          embed.add_field(name: "Message", value: "#{eventArr[5]}")
+          embed.add_field(name: "Date", value: "#{date}")
+          embed.add_field(name: "Time", value: "#{uri_time}")
+          embed.description = "[Convert to your local time](https://duckduckgo.com/?#{URI.encode_www_form([["q", "#{uri_time}"]])}&ia=answer)"
+        end
+      end
     end
 
     # timezoned_results = @db.exec("
     #   SELECT reminder_time AT TIME ZONE 'US/Eastern' FROM events                                   
     #   WHERE event_id = #{results.values.flatten[0].to_i};
     # ")
-    # uri_time = results.values.flatten[3].split()[-2..-1].join(" ")
-    # binding.pry
-
     
-    # .send_embed("**Reminder**") do |embed|
-    #   embed.colour = 0x4e06ca
-    #   embed.add_field(name: "Title", value: "#{results.values.flatten[2]}")
-    #   embed.add_field(name: "Message", value: "#{results.values.flatten[4]}")
-    #   embed.add_field(name: "Time", value: "#{user_results.values.flatten[2]} (#{user_results.values.flatten[1]})")
-    #   embed.description = "[Convert to your local time](https://duckduckgo.com/?#{URI.encode_www_form([["q", "#{uri_time}"]])}&ia=answer)"
-    # end
   end
 end
 
@@ -167,8 +174,7 @@ end
 
 #Reminder function
 
-@bot.command(:reminder, usage: 'Remind me') do |event|
-
+@bot.command(%i[reminder event], usage: 'Remind me') do |event|
   if is_registered?(event)
     register_user(event)
     user_data = get_user_info(event)
@@ -176,7 +182,6 @@ end
   else
     create_user_event(event)
   end
-  
 end
 
 
@@ -289,40 +294,80 @@ def add_user_to_db(event, user_data)
 end
 
 def create_user_event(event)
-  binding.pry
   discord_id = event.user.id
-  results = @db.exec("SELECT timezone, user_id from users WHERE discord_id = #{discord_id};")
-  timezone = results.values.flatten[0]
-  user_id = results.values.flatten[1].to_i
-  automated_response = event.respond "Please enter the time & description of event (MM/DD/YY HH:MM AM/PM, Title, Message)"
-  response = event.user.await!
-  eventArr = response.message.content.split(/,\s*/)
-  date = eventArr[0] + " " + timezone
-  title = eventArr[1]
-  message = eventArr[2]
-  @db.prepare('addtime', "
-    INSERT INTO events 
-    VALUES (DEFAULT, DEFAULT, $1::text, $2::timestamptz, $3::text)
-    RETURNING event_id, reminder_time - creation_time;
-  ")
-  results = @db.exec_prepared('addtime', [title, date, message])
-  # binding.pry
-  event_id = results.values.flatten[0].to_i
-  time_till = results.values.flatten[1]
-  @db.exec("DEALLOCATE addtime;")
 
-  if !results.values.empty?
-    @db.exec("
-      INSERT INTO user_events 
-      VALUES (#{user_id}, #{event_id});
+  if event.command.name === :event
+    event_type = 1
+        results = @db.exec("SELECT timezone, user_id from users WHERE discord_id = #{discord_id};")
+    timezone = results.values.flatten[0]
+    user_id = results.values.flatten[1].to_i
+    automated_response = event.respond "Please enter the time & description of the #{event.command.name} (MM/DD/YY HH:MM AM/PM, Title, Message)"
+    response = event.user.await!
+    eventArr = response.message.content.split(/,\s*/)
+    date = eventArr[0] + " " + timezone
+    title = eventArr[1]
+    message = eventArr[2]
+    @db.prepare('addtime', "
+      INSERT INTO events 
+      VALUES (DEFAULT, DEFAULT, $1::text, $2::timestamptz, $3::int, $4::text)
+      RETURNING event_id, reminder_time - creation_time;
     ")
+    results = @db.exec_prepared('addtime', [title, date, event_type, message])
+    # binding.pry
+    event_id = results.values.flatten[0].to_i
+    time_till = results.values.flatten[1]
+    @db.exec("DEALLOCATE addtime;")
+  
+    if !results.values.empty?
+      @db.exec("
+        INSERT INTO user_events 
+        VALUES (#{user_id}, #{event_id});
+      ")
+  
+      event.respond ">>> Event created by #{event.user.name} for #{time_till} from now."
+      event.channel.delete_messages([event.message, automated_response, response.message])
+      results.clear
+    else
+      event.respond "Event Registration Error"
+    end
 
-    event.respond ">>> Reminder set for #{event.user.name} for #{time_till} from now."
-    event.channel.delete_messages([event.message, automated_response, response.message])
-    results.clear
-  else
-    event.respond "Event Registration Error"
+  elsif event.command.name === :reminder
+    event_type = 2
+
+    results = @db.exec("SELECT timezone, user_id from users WHERE discord_id = #{discord_id};")
+    timezone = results.values.flatten[0]
+    user_id = results.values.flatten[1].to_i
+    automated_response = event.respond "Please enter the time & description of the #{event.command.name} (MM/DD/YY HH:MM AM/PM, Title, Message)"
+    response = event.user.await!
+    eventArr = response.message.content.split(/,\s*/)
+    date = eventArr[0] + " " + timezone
+    title = eventArr[1]
+    message = eventArr[2]
+    @db.prepare('addtime', "
+      INSERT INTO events 
+      VALUES (DEFAULT, DEFAULT, $1::text, $2::timestamptz, $3::int, $4::text)
+      RETURNING event_id, reminder_time - creation_time;
+    ")
+    results = @db.exec_prepared('addtime', [title, date, event_type, message])
+    # binding.pry
+    event_id = results.values.flatten[0].to_i
+    time_till = results.values.flatten[1]
+    @db.exec("DEALLOCATE addtime;")
+  
+    if !results.values.empty?
+      @db.exec("
+        INSERT INTO user_events 
+        VALUES (#{user_id}, #{event_id});
+      ")
+  
+      event.respond ">>> Reminder set for #{event.user.name} for #{time_till} from now."
+      event.channel.delete_messages([event.message, automated_response, response.message])
+      results.clear
+    else
+      event.respond "Event Registration Error"
+    end
   end
+
 end
 
 
