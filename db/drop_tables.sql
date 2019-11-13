@@ -1,0 +1,1 @@
+DROP TABLE IF EXISTS users, user_events, events CASCADE;

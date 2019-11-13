@@ -54,7 +54,7 @@ def check_db_for_events
   end
 end
 
-# Maybe pm reminders to user who created reminder instead of channel + mention
+
 # Add "convert time" link to new event embed, and add user timezone query to get a select for utc time in user local time (Maybe uneccesary since user pm will have time)
 def check_events
   check_db_for_events
@@ -238,7 +238,7 @@ end
         'My reply is no', 'My sources say no', 'Outlook not so good',
         'Very doubtful', 'Chances aren\'t good' ]
 
-          event.respond("🎱#{options[rand(20..21)]}🎱")
+          event.respond("🎱#{options[rand(0..21)]}🎱")
 end
 
 @bot.command(:dota2_a, description: "Show the last Dota 2 Game of Alienated.") do |event|
@@ -317,8 +317,6 @@ def add_user_to_db(event)
   end
 end
 
-
-# Change event registered to pm to user with Reminder set for localtime or do a diff between creation_time and reminder time to show when the reminder will happen ("Reminder set for <time> from now")
 def create_user_event(event)
   discord_id = event.user.id
   results = @db.exec("SELECT timezone, user_id from users WHERE discord_id = #{discord_id};")
