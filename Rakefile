@@ -13,14 +13,18 @@ namespace :db do
     desc "Creates default tables"
     task :create => :pg_conn do
         puts "Creating tables"
-        
+
         FileList['db/*_table.sql'].each do |table|
+            base_table_name = table.gsub(/\.*_table.sql$/, '').gsub(/^db\/\w{3}/, '')
+
             begin
                 $db_conn.exec File.open(table).read
             rescue PG::Error
+                puts "Creating #{base_table_name} table"
                 puts $failed
                 raise
             else
+                puts "Creating #{base_table_name} table"
                 puts $succeeded
             end
         end

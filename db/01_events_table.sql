@@ -3,5 +3,6 @@ CREATE TABLE events (
     creation_time  TIMESTAMPTZ NOT NULL DEFAULT LOCALTIMESTAMP(0),
     event_title    TEXT NOT NULL,
     reminder_time  TIMESTAMPTZ NOT NULL,
+    event_type     INT NOT NULL,
     message        TEXT
 );
